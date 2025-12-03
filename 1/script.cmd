@@ -32,7 +32,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo === STEP 4: Build project ===
-cmake --build . --config %CONFIG%
+make .
 if %ERRORLEVEL% neq 0 (
     echo Build failed!
     exit /b 1

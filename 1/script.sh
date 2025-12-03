@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# === Настройки ===
 REPO_DIR="/Users/poslam/Downloads/projects/fefu/7/os/1/sem7-os-proj"
 BUILD_DIR="$REPO_DIR/build"
 CONFIG="Release"
@@ -21,6 +20,6 @@ cd "$BUILD_DIR"
 cmake -DCMAKE_BUILD_TYPE=$CONFIG ..
 
 echo "=== STEP 4: Build project ==="
-cmake --build . --config $CONFIG -j$(nproc)
+make
 
 echo "=== DONE ==="
