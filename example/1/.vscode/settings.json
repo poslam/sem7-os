@@ -1,0 +1,32 @@
+{
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/lab6/include/frontend",
+        "${workspaceFolder}/lab6/include/backend",
+        "C:/dev/Qt/6.10.1/msvc2022_64/include",
+        "C:/dev/Qt/6.10.1/msvc2022_64/include/**",
+        "C:/Qwt-6.3.0/include",
+        "C:/Qwt-6.3.0/include/**",
+        "C:/dev/tools/vcpkg/installed/x64-windows/include",
+        "C:/dev/tools/vcpkg/installed/x64-windows/include/**"
+    ],
+    "C_Cpp.default.compilerPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe",
+    "C_Cpp.default.intelliSenseMode": "msvc-x64",
+    "C_Cpp.default.browse.path": [
+        "${workspaceFolder}/lab6/include/frontend",
+        "${workspaceFolder}/lab6/include/backend",
+        "C:/dev/Qt/6.10.1/msvc2022_64/include",
+        "C:/dev/Qt/6.10.1/msvc2022_64/include/**",
+        "C:/Qwt-6.3.0/include",
+        "C:/Qwt-6.3.0/include/**",
+        "C:/dev/tools/vcpkg/installed/x64-windows/include",
+        "C:/dev/tools/vcpkg/installed/x64-windows/include/**"
+    ],
+    "cmake.configureArgs": [
+        "-DCMAKE_PREFIX_PATH=C:/dev/Qt/6.10.1/msvc2022_64;C:/Qwt-6.3.0;C:/dev/tools/vcpkg/installed/x64-windows"
+    ],
+    "chatgpt.commentCodeLensEnabled": false,
+    "files.associations": {
+        "chrono": "cpp"
+    }
+}
