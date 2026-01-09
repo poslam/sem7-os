@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/Users/poslam/Downloads/projects/fefu/7/os/1/sem7-os-proj"
+    "cmake.sourceDirectory": "/Users/poslam/Downloads/projects/fefu/7/os/1/sem7-os-proj",
+    "cmake.ignoreCMakeListsMissing": true
 }
