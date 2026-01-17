@@ -1,15 +1,32 @@
-﻿#ifndef APP_H
+#ifndef APP_H
 #define APP_H
 
-#ifdef __cplusplus
-extern "C"
+#include <stdbool.h>
+
+// Типы запуска программы
+typedef enum
 {
-#endif
+    MODE_NORMAL = 0, // Обычный режим
+    MODE_COPY1 = 1,  // Копия 1 (+10)
+    MODE_COPY2 = 2   // Копия 2 (*2, потом /2)
+} run_mode_t;
 
-    void run_app(int is_child, int child_mode);
+// Инициализация приложения
+int app_init(run_mode_t mode);
 
-#ifdef __cplusplus
-}
-#endif
+// Основной цикл приложения
+int app_run(void);
+
+// Очистка ресурсов
+void app_cleanup(void);
+
+// Обработка пользовательского ввода
+void app_handle_input(void);
+
+// Логирование
+void app_log(const char *format, ...);
+
+// Установить путь к исполняемому файлу
+void app_set_program_path(const char *path);
 
 #endif /* APP_H */

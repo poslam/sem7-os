@@ -1,30 +1,52 @@
-﻿#ifndef SHARED_H
+#ifndef SHARED_H
 #define SHARED_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C"
+// Имя разделяемой памяти
+#define SHARED_MEMORY_NAME "lab3_shared_memory"
+#define SHARED_MEMORY_SIZE sizeof(shared_data_t)
+
+// Структура разделяемых данных
+typedef struct
 {
-#endif
+    int64_t counter;    // Счетчик
+    int master_pid;     // PID главного процесса
+    bool copy1_running; // Флаг выполнения копии 1
+    bool copy2_running; // Флаг выполнения копии 2
+} shared_data_t;
 
-    typedef struct
-    {
-        int64_t counter;
-        int64_t owner_pid;
-        int64_t owner_heartbeat_ms;
-        int64_t child1_pid;
-        int64_t child2_pid;
-        int64_t child1_start_ms;
-        int64_t child2_start_ms;
-    } SharedState;
+// Инициализация разделяемой памяти
+int shared_init(void);
 
-    int64_t now_ms(void);
-    const char *shared_file_path(void);
-    const char *log_file_path(void);
+// Освобождение разделяемой памяти
+void shared_cleanup(void);
 
-#ifdef __cplusplus
-}
-#endif
+// Получить указатель на разделяемые данные
+shared_data_t *shared_get_data(void);
+
+// Установить значение счетчика
+void shared_set_counter(int64_t value);
+
+// Получить значение счетчика
+int64_t shared_get_counter(void);
+
+// Добавить к счетчику
+void shared_add_counter(int64_t delta);
+
+// Умножить счетчик
+void shared_multiply_counter(int multiplier);
+
+// Делить счетчик
+void shared_divide_counter(int divisor);
+
+// Установить/проверить флаг главного процесса
+bool shared_try_become_master(int pid);
+int shared_get_master_pid(void);
+
+// Установить/получить статус копий
+void shared_set_copy_status(int copy_num, bool running);
+bool shared_get_copy_status(int copy_num);
 
 #endif /* SHARED_H */

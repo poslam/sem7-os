@@ -1,54 +1,52 @@
-﻿#ifndef PLATFORM_H
+#ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include <stdint.h>
-#include "shared.h"
+#include <stdio.h>
+#include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+// Получить текущий PID
+int platform_get_pid(void);
 
-    int64_t get_pid(void);
-    int is_process_alive(int64_t other_pid);
-    const char *get_timestamp(void);
-    const char *exe_path(void);
-    const char *data_dir(void);
+// Получить текущее время в миллисекундах
+long long platform_get_time_ms(void);
 
-    typedef struct
-    {
-#ifdef _WIN32
-        void *handle; /* HANDLE */
-#else
-    int fd;
-#endif
-    } FileLock;
+// Форматировать время для лога
+void platform_format_time(char *buffer, size_t size);
 
-    FileLock *file_lock_create(const char *path);
-    void file_lock_destroy(FileLock *lock);
-    int file_lock_is_locked(const FileLock *lock);
+// Спать миллисекунды
+void platform_sleep_ms(int ms);
 
-    void log_line(const char *line);
+// Запустить копию программы с аргументом
+int platform_spawn_copy(const char *program_path, int copy_type);
 
-    typedef struct
-    {
-#ifdef _WIN32
-        void *file;    /* HANDLE */
-        void *mapping; /* HANDLE */
-#else
-    int fd;
-#endif
-        SharedState *ptr;
-    } SharedMap;
+// Проверить, завершился ли дочерний процесс
+bool platform_check_process_finished(int pid);
 
-    void shared_map_init(SharedMap *m);
-    int map_shared(SharedMap *m);
-    void unmap_shared(SharedMap *m);
-    int should_take_over(const SharedState *s, int64_t self);
-    int64_t launch_child(int mode);
+// Создать/открыть лог файл
+FILE *platform_open_log(const char *filename, bool append);
 
-#ifdef __cplusplus
-}
-#endif
+// Создать мьютекс
+void *platform_create_mutex(void);
+
+// Уничтожить мьютекс
+void platform_destroy_mutex(void *mutex);
+
+// Захватить мьютекс
+void platform_lock_mutex(void *mutex);
+
+// Освободить мьютекс
+void platform_unlock_mutex(void *mutex);
+
+// Создать shared memory
+void *platform_create_shared_memory(const char *name, size_t size);
+
+// Открыть существующую shared memory
+void *platform_open_shared_memory(const char *name, size_t size);
+
+// Закрыть shared memory
+void platform_close_shared_memory(void *ptr, size_t size);
+
+// Удалить shared memory
+void platform_unlink_shared_memory(const char *name);
 
 #endif /* PLATFORM_H */

@@ -1,31 +1,57 @@
-﻿cmake_minimum_required(VERSION 3.10)
-
-project(lab3 LANGUAGES C)
+cmake_minimum_required(VERSION 3.10)
+project(Lab3ProcessManager C)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-if(CMAKE_CONFIGURATION_TYPES)
-    foreach(OUTPUTCONFIG IN LISTS CMAKE_CONFIGURATION_TYPES)
-        string(TOUPPER "${OUTPUTCONFIG}" OUTPUTCONFIG_UPPER)
-        set("CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-    endforeach()
-endif()
+# Создаем директорию для логов
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/lab3/logs")
 
-find_package(Threads REQUIRED)
+# Включаем директории заголовочных файлов
+include_directories(include)
 
-add_executable(lab3_main
+# Исходные файлы
+set(SOURCES
     src/main.c
     src/app.c
-    src/platform.c
     src/shared.c
+    src/platform.c
 )
 
-target_include_directories(lab3_main PRIVATE include)
+# Создаем исполняемый файл
+add_executable(lab3_main ${SOURCES})
 
-target_link_libraries(lab3_main PRIVATE Threads::Threads)
+# Утилита очистки shared memory
+add_executable(cleanup_tool
+    src/cleanup_tool.c
+    src/shared.c
+    src/platform.c
+)
 
-if(WIN32)
-    target_compile_definitions(lab3_main PRIVATE _WIN32_WINNT=0x0601)
+# Линковка библиотек для POSIX систем
+if(UNIX AND NOT APPLE)
+    target_link_libraries(lab3_main pthread rt)
+    target_link_libraries(cleanup_tool pthread rt)
+elseif(UNIX)
+    target_link_libraries(lab3_main pthread)
+    target_link_libraries(cleanup_tool pthread)
 endif()
+
+# Установка опций компиляции
+if(MSVC)
+    target_compile_options(lab3_main PRIVATE /W4)
+    target_compile_options(cleanup_tool PRIVATE /W4)
+else()
+    target_compile_options(lab3_main PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(cleanup_tool PRIVATE -Wall -Wextra -pedantic)
+endif()
+
+# Установка выходной директории
+set_target_properties(lab3_main cleanup_tool PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Копирование директории логов в build
+add_custom_command(TARGET lab3_main POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+    "${CMAKE_BINARY_DIR}/bin/lab3/logs"
+)

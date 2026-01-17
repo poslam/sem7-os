@@ -1,267 +1,291 @@
 #include "app.h"
-
+#include "shared.h"
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+#include <stdarg.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#define sleep_ms(ms) Sleep(ms)
-#else
+#ifndef _WIN32
+#include <sys/select.h>
 #include <unistd.h>
-#define sleep_ms(ms) usleep((ms) * 1000)
 #endif
 
-#include "platform.h"
-#include "shared.h"
+#define LOG_FILE "lab3/logs/process.log"
+#define TIMER_300MS 300
+#define TIMER_1SEC 1000
+#define TIMER_3SEC 3000
 
-typedef struct {
-    int mode;
-    SharedMap* map;
-} ChildThreadData;
+static FILE* g_log_file = NULL;
+static run_mode_t g_mode = MODE_NORMAL;
+static int g_my_pid = 0;
+static bool g_is_master = false;
+static long long g_start_time = 0;
+static long long g_last_300ms = 0;
+static long long g_last_1sec = 0;
+static long long g_last_3sec = 0;
+static int g_copy1_pid = 0;
+static int g_copy2_pid = 0;
+static char g_program_path[1024] = {0};
+static bool g_running = true;
 
-typedef struct {
-    SharedMap* map;
-    volatile int* running;
-    int64_t self;
-} MainThreadData;
-
-static void run_child(int mode, SharedMap* map) {
-    int64_t self = get_pid();
-    char log_msg[256];
-    snprintf(log_msg, sizeof(log_msg), "%s child%d start pid=%lld", 
-             get_timestamp(), mode, (long long)self);
-    log_line(log_msg);
+void app_log(const char* format, ...) {
+    if (g_log_file == NULL) return;
     
-    {
-        char lock_path[600];
-        snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-        FileLock* lock = file_lock_create(lock_path);
-        if (file_lock_is_locked(lock) && map->ptr) {
-            if (mode == 1) {
-                map->ptr->counter += 10;
-            } else {
-                map->ptr->counter *= 2;
-            }
-        }
-        file_lock_destroy(lock);
-    }
+    char time_buffer[64];
+    platform_format_time(time_buffer, sizeof(time_buffer));
     
-    if (mode == 2) {
-        sleep_ms(2000);
-        char lock_path[600];
-        snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-        FileLock* lock = file_lock_create(lock_path);
-        if (file_lock_is_locked(lock) && map->ptr) {
-            map->ptr->counter /= 2;
-        }
-        file_lock_destroy(lock);
-    }
+    fprintf(g_log_file, "[%s] [PID:%d] ", time_buffer, g_my_pid);
     
-    snprintf(log_msg, sizeof(log_msg), "%s child%d exit pid=%lld",
-             get_timestamp(), mode, (long long)self);
-    log_line(log_msg);
+    va_list args;
+    va_start(args, format);
+    vfprintf(g_log_file, format, args);
+    va_end(args);
+    
+    fprintf(g_log_file, "\n");
+    fflush(g_log_file);
 }
 
-static void* input_thread_func(void* arg) {
-    MainThreadData* data = (MainThreadData*)arg;
-    char line[256];
+int app_init(run_mode_t mode) {
+    g_mode = mode;
+    g_my_pid = platform_get_pid();
+    g_start_time = platform_get_time_ms();
     
-    while (*data->running && fgets(line, sizeof(line), stdin)) {
-        char* newline = strchr(line, '\n');
-        if (newline) *newline = '\0';
-        
-        char cmd[64];
-        long long val;
-        
-        if (sscanf(line, "%s %lld", cmd, &val) >= 1) {
-            if (strcmp(cmd, "set") == 0) {
-                if (sscanf(line, "%s %lld", cmd, &val) == 2) {
-                    char lock_path[600];
-                    snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-                    FileLock* lock = file_lock_create(lock_path);
-                    if (file_lock_is_locked(lock) && data->map->ptr) {
-                        data->map->ptr->counter = val;
-                        char log_msg[256];
-                        snprintf(log_msg, sizeof(log_msg), "%s pid=%lld set counter=%lld",
-                                get_timestamp(), (long long)data->self, val);
-                        log_line(log_msg);
-                    }
-                    file_lock_destroy(lock);
-                } else {
-                    printf("Usage: set <number>\n");
-                }
-            } else if (strcmp(cmd, "exit") == 0 || strcmp(cmd, "quit") == 0) {
-                *(data->running) = 0;
-                break;
-            }
+    // Инициализация shared memory
+    if (shared_init() != 0) {
+        fprintf(stderr, "Failed to initialize shared memory\n");
+        return -1;
+    }
+    
+    // Открываем лог файл
+    g_log_file = platform_open_log(LOG_FILE, true);
+    if (g_log_file == NULL) {
+        fprintf(stderr, "Failed to open log file\n");
+        shared_cleanup();
+        return -1;
+    }
+    
+    // Инициализируем таймеры
+    g_last_300ms = g_start_time;
+    g_last_1sec = g_start_time;
+    g_last_3sec = g_start_time;
+    
+    // Записываем старт в лог
+    app_log("Process started (mode=%d)", mode);
+    
+    // Пробуем стать мастером (только для обычного режима)
+    if (g_mode == MODE_NORMAL) {
+        g_is_master = shared_try_become_master(g_my_pid);
+        if (g_is_master) {
+            app_log("Became MASTER process");
+            printf("Process %d: MASTER mode\n", g_my_pid);
+        } else {
+            app_log("Running as SLAVE process (master=%d)", shared_get_master_pid());
+            printf("Process %d: SLAVE mode (master=%d)\n", g_my_pid, shared_get_master_pid());
         }
     }
-    *(data->running) = 0;
-    return NULL;
+    
+    return 0;
 }
 
-static void* counter_thread_func(void* arg) {
-    MainThreadData* data = (MainThreadData*)arg;
+void app_cleanup(void) {
+    app_log("Process exiting");
     
-    while (*data->running) {
-        sleep_ms(300);
-        char lock_path[600];
-        snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-        FileLock* lock = file_lock_create(lock_path);
-        if (file_lock_is_locked(lock) && data->map->ptr) {
-            data->map->ptr->counter += 1;
-        }
-        file_lock_destroy(lock);
+    if (g_log_file != NULL) {
+        fclose(g_log_file);
+        g_log_file = NULL;
     }
-    return NULL;
+    
+    shared_cleanup();
 }
 
-void run_app(int is_child, int child_mode) {
-    SharedMap map;
-    shared_map_init(&map);
+static void handle_copy1_mode(void) {
+    // Копия 1: +10 к счетчику
+    app_log("Copy1 started");
+    shared_set_copy_status(1, true);
     
-    if (!map_shared(&map) || !map.ptr) {
-        fprintf(stderr, "Failed to map shared state\n");
-        return;
+    platform_sleep_ms(100); // Небольшая задержка
+    
+    shared_add_counter(10);
+    int64_t counter = shared_get_counter();
+    app_log("Copy1: counter += 10, new value = %lld", (long long)counter);
+    
+    shared_set_copy_status(1, false);
+    app_log("Copy1 exiting");
+}
+
+static void handle_copy2_mode(void) {
+    // Копия 2: *2, ждем 2 сек, /2
+    app_log("Copy2 started");
+    shared_set_copy_status(2, true);
+    
+    platform_sleep_ms(100);
+    
+    shared_multiply_counter(2);
+    int64_t counter = shared_get_counter();
+    app_log("Copy2: counter *= 2, new value = %lld", (long long)counter);
+    
+    platform_sleep_ms(2000);
+    
+    shared_divide_counter(2);
+    counter = shared_get_counter();
+    app_log("Copy2: counter /= 2, new value = %lld", (long long)counter);
+    
+    shared_set_copy_status(2, false);
+    app_log("Copy2 exiting");
+}
+
+static void timer_300ms_handler(void) {
+    // Увеличиваем счетчик на 1
+    shared_add_counter(1);
+}
+
+static void timer_1sec_handler(void) {
+    if (!g_is_master) return;
+    
+    // Логируем текущее состояние
+    int64_t counter = shared_get_counter();
+    app_log("Timer 1s: counter = %lld", (long long)counter);
+}
+
+static void timer_3sec_handler(void) {
+    if (!g_is_master) return;
+    
+    // Проверяем статус предыдущих копий
+    bool copy1_busy = shared_get_copy_status(1);
+    bool copy2_busy = shared_get_copy_status(2);
+    
+    // Проверяем реальный статус процессов
+    if (g_copy1_pid > 0 && platform_check_process_finished(g_copy1_pid)) {
+        g_copy1_pid = 0;
+        copy1_busy = false;
+        shared_set_copy_status(1, false);
     }
     
-    int64_t self = get_pid();
-    char log_msg[256];
-    snprintf(log_msg, sizeof(log_msg), "%s start pid=%lld", get_timestamp(), (long long)self);
-    log_line(log_msg);
-    
-    if (is_child) {
-        run_child(child_mode, &map);
-        unmap_shared(&map);
-        return;
+    if (g_copy2_pid > 0 && platform_check_process_finished(g_copy2_pid)) {
+        g_copy2_pid = 0;
+        copy2_busy = false;
+        shared_set_copy_status(2, false);
     }
     
-    volatile int running = 1;
-    pthread_t input_thread, counter_thread;
-    
-    MainThreadData thread_data;
-    thread_data.map = &map;
-    thread_data.running = &running;
-    thread_data.self = self;
-    
-    pthread_create(&input_thread, NULL, input_thread_func, &thread_data);
-    pthread_create(&counter_thread, NULL, counter_thread_func, &thread_data);
-    
-    int64_t last_log = now_ms();
-    int64_t last_spawn = now_ms();
-    
-    while (running) {
-        sleep_ms(100);
-        int64_t t = now_ms();
-        
-        /* Owner election and heartbeat */
-        {
-            char lock_path[600];
-            snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-            FileLock* lock = file_lock_create(lock_path);
-            if (file_lock_is_locked(lock) && map.ptr) {
-                if (map.ptr->owner_pid == self) {
-                    map.ptr->owner_heartbeat_ms = t;
-                } else if (should_take_over(map.ptr, self)) {
-                    map.ptr->owner_pid = self;
-                    map.ptr->owner_heartbeat_ms = t;
-                    snprintf(log_msg, sizeof(log_msg), "%s pid=%lld became owner",
-                            get_timestamp(), (long long)self);
-                    log_line(log_msg);
-                }
-            }
-            file_lock_destroy(lock);
+    // Запускаем копию 1
+    if (!copy1_busy) {
+        g_copy1_pid = platform_spawn_copy(g_program_path, MODE_COPY1);
+        if (g_copy1_pid > 0) {
+            app_log("Spawned Copy1 with PID %d", g_copy1_pid);
+        } else {
+            app_log("Failed to spawn Copy1");
         }
-        
-        int am_owner = 0;
-        {
-            char lock_path[600];
-            snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-            FileLock* lock = file_lock_create(lock_path);
-            if (file_lock_is_locked(lock) && map.ptr) {
-                am_owner = (map.ptr->owner_pid == self);
-            }
-            file_lock_destroy(lock);
-        }
-        
-        if (am_owner) {
-            if (t - last_log >= 1000) {
-                last_log = t;
-                int64_t cnt = 0;
-                {
-                    char lock_path[600];
-                    snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-                    FileLock* lock = file_lock_create(lock_path);
-                    if (file_lock_is_locked(lock) && map.ptr) {
-                        cnt = map.ptr->counter;
-                    }
-                    file_lock_destroy(lock);
-                }
-                snprintf(log_msg, sizeof(log_msg), "%s pid=%lld counter=%lld",
-                        get_timestamp(), (long long)self, (long long)cnt);
-                log_line(log_msg);
-            }
-            
-            if (t - last_spawn >= 3000) {
-                last_spawn = t;
-                int child_running = 0;
-                {
-                    char lock_path[600];
-                    snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-                    FileLock* lock = file_lock_create(lock_path);
-                    if (file_lock_is_locked(lock) && map.ptr) {
-                        if (map.ptr->child1_pid && is_process_alive(map.ptr->child1_pid)) {
-                            child_running = 1;
-                        } else {
-                            map.ptr->child1_pid = 0;
-                        }
-                        if (map.ptr->child2_pid && is_process_alive(map.ptr->child2_pid)) {
-                            child_running = 1;
-                        } else {
-                            map.ptr->child2_pid = 0;
-                        }
-                    }
-                    file_lock_destroy(lock);
-                }
-                
-                if (child_running) {
-                    snprintf(log_msg, sizeof(log_msg), "%s pid=%lld skip spawn: child still running",
-                            get_timestamp(), (long long)self);
-                    log_line(log_msg);
-                } else {
-                    int64_t p1 = launch_child(1);
-                    int64_t p2 = launch_child(2);
-                    {
-                        char lock_path[600];
-                        snprintf(lock_path, sizeof(lock_path), "%s.lock", shared_file_path());
-                        FileLock* lock = file_lock_create(lock_path);
-                        if (file_lock_is_locked(lock) && map.ptr) {
-                            map.ptr->child1_pid = p1;
-                            map.ptr->child2_pid = p2;
-                        }
-                        file_lock_destroy(lock);
-                    }
-                    if (!p1 || !p2) {
-                        snprintf(log_msg, sizeof(log_msg), "%s pid=%lld failed to spawn child(s)",
-                                get_timestamp(), (long long)self);
-                        log_line(log_msg);
-                    } else {
-                        snprintf(log_msg, sizeof(log_msg), "%s pid=%lld spawned children %lld, %lld",
-                                get_timestamp(), (long long)self, (long long)p1, (long long)p2);
-                        log_line(log_msg);
-                    }
-                }
-            }
-        }
+    } else {
+        app_log("Copy1 is still running, skipping spawn");
     }
     
-    running = 0;
-    pthread_join(input_thread, NULL);
-    pthread_join(counter_thread, NULL);
+    // Запускаем копию 2
+    if (!copy2_busy) {
+        g_copy2_pid = platform_spawn_copy(g_program_path, MODE_COPY2);
+        if (g_copy2_pid > 0) {
+            app_log("Spawned Copy2 with PID %d", g_copy2_pid);
+        } else {
+            app_log("Failed to spawn Copy2");
+        }
+    } else {
+        app_log("Copy2 is still running, skipping spawn");
+    }
+}
+
+void app_handle_input(void) {
+    // Проверяем наличие данных на stdin (неблокирующий режим)
+#ifndef _WIN32
+    fd_set readfds;
+    struct timeval tv;
     
-    snprintf(log_msg, sizeof(log_msg), "%s exit pid=%lld", get_timestamp(), (long long)self);
-    log_line(log_msg);
-    unmap_shared(&map);
+    FD_ZERO(&readfds);
+    FD_SET(STDIN_FILENO, &readfds);
+    
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    
+    int ret = select(STDIN_FILENO + 1, &readfds, NULL, NULL, &tv);
+    if (ret <= 0) return; // Нет данных или ошибка
+#endif
+    
+    char buffer[256];
+    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+        // Убираем перевод строки
+        buffer[strcspn(buffer, "\n")] = 0;
+        
+        if (strlen(buffer) == 0) return;
+        
+        // Парсим команду
+        if (strcmp(buffer, "quit") == 0 || strcmp(buffer, "exit") == 0 || strcmp(buffer, "q") == 0) {
+            printf("Exiting...\n");
+            g_running = false;
+        } else if (strcmp(buffer, "get") == 0) {
+            int64_t value = shared_get_counter();
+            printf("Counter = %lld\n", (long long)value);
+        } else if (strncmp(buffer, "set ", 4) == 0) {
+            long long value = atoll(buffer + 4);
+            shared_set_counter(value);
+            printf("Counter set to %lld\n", value);
+            app_log("User set counter to %lld", value);
+        } else {
+            printf("Unknown command. Available: set <value>, get, quit\n");
+        }
+    }
+}
+
+int app_run(void) {
+    // Режим копии - выполняем задачу и выходим
+    if (g_mode == MODE_COPY1) {
+        handle_copy1_mode();
+        return 0;
+    } else if (g_mode == MODE_COPY2) {
+        handle_copy2_mode();
+        return 0;
+    }
+    
+    // Обычный режим - бесконечный цикл
+    printf("\n=== Lab 3 Process Manager ===\n");
+    printf("PID: %d, Mode: %s\n", g_my_pid, g_is_master ? "MASTER" : "SLAVE");
+    printf("Commands:\n");
+    printf("  set <value> - Set counter value\n");
+    printf("  get         - Get current counter value\n");
+    printf("  quit        - Exit program\n");
+    printf("==============================\n\n");
+    
+    // Основной цикл
+    while (g_running) {
+        long long current_time = platform_get_time_ms();
+        
+        // Таймер 300 мс
+        if (current_time - g_last_300ms >= TIMER_300MS) {
+            timer_300ms_handler();
+            g_last_300ms = current_time;
+        }
+        
+        // Таймер 1 сек
+        if (current_time - g_last_1sec >= TIMER_1SEC) {
+            timer_1sec_handler();
+            g_last_1sec = current_time;
+        }
+        
+        // Таймер 3 сек
+        if (current_time - g_last_3sec >= TIMER_3SEC) {
+            timer_3sec_handler();
+            g_last_3sec = current_time;
+        }
+        
+        // Обработка пользовательского ввода
+        app_handle_input();
+        
+        // Короткая пауза чтобы не нагружать CPU
+        platform_sleep_ms(50);
+    }
+    
+    return 0;
+}
+
+void app_set_program_path(const char* path) {
+    strncpy(g_program_path, path, sizeof(g_program_path) - 1);
+    g_program_path[sizeof(g_program_path) - 1] = '\0';
 }

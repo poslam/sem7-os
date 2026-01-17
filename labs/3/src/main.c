@@ -1,18 +1,35 @@
 #include "app.h"
-
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int main(int argc, char* argv[]) {
-    int is_child = 0;
-    int child_mode = 0;
+    run_mode_t mode = MODE_NORMAL;
     
-    for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--child=", 8) == 0) {
-            is_child = 1;
-            child_mode = (argv[i][8] == '1') ? 1 : 2;
+    // Определяем режим работы из аргументов
+    if (argc > 1) {
+        int mode_arg = atoi(argv[1]);
+        if (mode_arg == 1) {
+            mode = MODE_COPY1;
+        } else if (mode_arg == 2) {
+            mode = MODE_COPY2;
         }
     }
     
-    run_app(is_child, child_mode);
-    return 0;
+    // Сохраняем путь к программе для запуска копий
+    app_set_program_path(argv[0]);
+    
+    // Инициализация
+    if (app_init(mode) != 0) {
+        fprintf(stderr, "Failed to initialize application\n");
+        return 1;
+    }
+    
+    // Запуск
+    int result = app_run();
+    
+    // Очистка
+    app_cleanup();
+    
+    return result;
 }

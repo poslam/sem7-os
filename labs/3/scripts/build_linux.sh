@@ -1,21 +1,46 @@
-﻿#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
 
-# Usage: ./lab3/scripts/build_linux.sh [BuildType]
-# Default: Debug. Requires git, cmake, and a C++17 toolchain in PATH.
+# Скрипт сборки для лабораторной работы 3
 
-BUILD_TYPE="${1:-Debug}"
-SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-LAB3_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
-REPO_ROOT="$(cd -- "${LAB3_ROOT}/.." && pwd -P)"
+echo "=========================================="
+echo "Building Lab 3 - Process Manager"
+echo "=========================================="
 
-echo "Updating repository..."
-git -C "${REPO_ROOT}" pull --rebase
+# Создаем директорию для сборки
+mkdir -p build
+cd build
 
-echo "Configuring CMake (${BUILD_TYPE})..."
-cmake -S "${LAB3_ROOT}" -B "${LAB3_ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+# Запускаем CMake
+echo "Running CMake..."
+cmake ..
 
+if [ $? -ne 0 ]; then
+    echo "CMake failed!"
+    exit 1
+fi
+
+# Компилируем проект
 echo "Building project..."
-cmake --build "${LAB3_ROOT}/build" --config "${BUILD_TYPE}"
+cmake --build .
 
-echo "Done. Binaries in ${LAB3_ROOT}/build/bin"
+if [ $? -ne 0 ]; then
+    echo "Build failed!"
+    exit 1
+fi
+
+echo "=========================================="
+echo "Build completed successfully!"
+echo "=========================================="
+echo ""
+echo "Executable is in: build/bin/"
+echo ""
+echo "To run:"
+echo "  cd build/bin"
+echo "  ./lab3_main"
+echo ""
+echo "To run multiple instances:"
+echo "  ./lab3_main &"
+echo "  ./lab3_main &"
+echo ""
+echo "Check logs in: build/bin/lab3/logs/process.log"
+echo ""

@@ -1,31 +1,47 @@
-﻿@echo off
-setlocal ENABLEEXTENSIONS
+@echo off
+REM Скрипт сборки для лабораторной работы 3 (Windows)
 
-REM Usage: build_windows.cmd [BuildType]
-REM Default: Debug. Requires git, cmake, and MinGW-w64 g++ in PATH.
+echo ==========================================
+echo Building Lab 3 - Process Manager
+echo ==========================================
 
-set BUILD_TYPE=%1
-if "%BUILD_TYPE%"=="" set BUILD_TYPE=Debug
+REM Создаем директорию для сборки
+if not exist build mkdir build
+cd build
 
-set SCRIPT_DIR=%~dp0
-for %%I in ("%SCRIPT_DIR%..") do set LAB3_ROOT=%%~fI
-for %%I in ("%LAB3_ROOT%\..") do set REPO_ROOT=%%~fI
+REM Запускаем CMake
+echo Running CMake...
+cmake ..
 
-echo Updating repository...
-git -C "%REPO_ROOT%" pull --rebase
-if errorlevel 1 goto :error
+if %ERRORLEVEL% NEQ 0 (
+    echo CMake failed!
+    exit /b 1
+)
 
-echo Configuring CMake (%BUILD_TYPE%)...
-cmake -S "%LAB3_ROOT%" -B "%LAB3_ROOT%\build" -DCMAKE_BUILD_TYPE=%BUILD_TYPE%
-if errorlevel 1 goto :error
-
+REM Компилируем проект
 echo Building project...
-cmake --build "%LAB3_ROOT%\build" --config %BUILD_TYPE%
-if errorlevel 1 goto :error
+cmake --build . --config Release
 
-echo Completed. Binaries in %LAB3_ROOT%\build\bin
-exit /b 0
+if %ERRORLEVEL% NEQ 0 (
+    echo Build failed!
+    exit /b 1
+)
 
-:error
-echo Build failed. See output above.
-exit /b 1
+echo ==========================================
+echo Build completed successfully!
+echo ==========================================
+echo.
+echo Executable is in: build\bin\Release\
+echo.
+echo To run:
+echo   cd build\bin\Release
+echo   lab3_main.exe
+echo.
+echo To run multiple instances:
+echo   start lab3_main.exe
+echo   start lab3_main.exe
+echo.
+echo Check logs in: build\bin\Release\lab3\logs\process.log
+echo.
+
+cd ..
