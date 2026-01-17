@@ -1,28 +1,48 @@
 cmake_minimum_required(VERSION 3.10)
-
-project(bgproc LANGUAGES C)
+project(ProcessLibrary C)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-if(CMAKE_CONFIGURATION_TYPES)
-    foreach(OUTPUTCONFIG IN LISTS CMAKE_CONFIGURATION_TYPES)
-        string(TOUPPER "${OUTPUTCONFIG}" OUTPUTCONFIG_UPPER)
-        set("CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-    endforeach()
+# Библиотека для работы с процессами
+add_library(process STATIC
+    process.c
+    process.h
+)
+
+# Тестовая программа для запуска в фоне
+add_executable(test_program
+    test_program.c
+)
+
+# Основная тестовая утилита
+add_executable(test_code
+    test_code.c
+)
+
+# Линковка библиотеки к тестовой утилите
+target_link_libraries(test_code process)
+
+# Установка опций компиляции
+if(MSVC)
+    target_compile_options(process PRIVATE /W4)
+    target_compile_options(test_code PRIVATE /W4)
+    target_compile_options(test_program PRIVATE /W4)
+else()
+    target_compile_options(process PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(test_code PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(test_program PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-add_library(bgproc STATIC
-    src/bg_process.c
+# Установка выходных директорий
+set_target_properties(test_code test_program PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-target_include_directories(bgproc PUBLIC include)
 
-if (WIN32)
-    target_compile_definitions(bgproc PRIVATE _WIN32_WINNT=0x0601)
+# Для Windows может понадобиться копирование test_program в рабочую директорию test_code
+if(WIN32)
+    add_custom_command(TARGET test_code POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:test_program>"
+        "$<TARGET_FILE_DIR:test_code>"
+    )
 endif()
-
-add_executable(bg_test
-    src/bg_test.c
-)
-target_link_libraries(bg_test PRIVATE bgproc)
