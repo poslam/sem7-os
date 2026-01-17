@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .current-temp {
+            background: white;
+            padding: 40px;
+            text-align: center;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .temp-display {
+            font-size: 4em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        
+        .temp-label {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .timestamp {
+            font-size: 0.9em;
+            color: #999;
+        }
+        
+        .charts-container {
+            padding: 40px;
+        }
+        
+        .chart-section {
+            margin-bottom: 50px;
+        }
+        
+        .chart-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .loading {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 40px;
+            background: #f8f9fa;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        .refresh-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌡️ Temperature Monitoring System</h1>
+            <p>Real-time temperature tracking and statistics</p>
+        </header>
+        
+        <div class="current-temp">
+            <div class="temp-label">Current Temperature</div>
+            <div class="temp-display" id="currentTemp">--</div>
+            <div class="timestamp" id="currentTime">Loading...</div>
+            <button class="refresh-btn" onclick="refreshData()">Refresh Data</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">24h Average</div>
+                <div class="stat-value" id="avg24h">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h Min</div>
+                <div class="stat-value" id="min24h">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h Max</div>
+                <div class="stat-value" id="max24h">--</div>
+            </div>
+        </div>
+        
+        <div class="charts-container">
+            <div class="chart-section">
+                <h2>📊 Hourly Temperature (Last 24 Hours)</h2>
+                <div class="chart-wrapper">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-section">
+                <h2>📈 Daily Temperature (Last 30 Days)</h2>
+                <div class="chart-wrapper">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let hourlyChart = null;
+        let dailyChart = null;
+
+        async function fetchData(endpoint) {
+            try {
+                const response = await fetch(`http://localhost:8080/api/${endpoint}`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                return await response.json();
+            } catch (error) {
+                console.error(`Error fetching ${endpoint}:`, error);
+                return null;
+            }
+        }
+
+        function formatDate(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+
+        function formatDateShort(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString();
+        }
+
+        async function updateCurrentTemp() {
+            const data = await fetchData('current');
+            if (data && data.temperature !== undefined) {
+                document.getElementById('currentTemp').textContent = 
+                    `${data.temperature.toFixed(1)}°C`;
+                document.getElementById('currentTime').textContent = 
+                    formatDate(data.timestamp);
+            }
+        }
+
+        async function updateHourlyChart() {
+            const data = await fetchData('hourly');
+            if (!data || !data.data || data.data.length === 0) {
+                console.log('No hourly data available');
+                return;
+            }
+
+            const labels = data.data.map(item => formatDateShort(item.timestamp));
+            const temps = data.data.map(item => item.temperature);
+
+            // Calculate stats
+            const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
+            const min = Math.min(...temps);
+            const max = Math.max(...temps);
+
+            document.getElementById('avg24h').textContent = `${avg.toFixed(1)}°C`;
+            document.getElementById('min24h').textContent = `${min.toFixed(1)}°C`;
+            document.getElementById('max24h').textContent = `${max.toFixed(1)}°C`;
+
+            const ctx = document.getElementById('hourlyChart');
+            
+            if (hourlyChart) {
+                hourlyChart.destroy();
+            }
+
+            hourlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: temps,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function updateDailyChart() {
+            const data = await fetchData('daily');
+            if (!data || !data.data || data.data.length === 0) {
+                console.log('No daily data available');
+                return;
+            }
+
+            const labels = data.data.map(item => {
+                const date = new Date(item.timestamp * 1000);
+                return date.toLocaleDateString();
+            });
+            const temps = data.data.map(item => item.temperature);
+
+            const ctx = document.getElementById('dailyChart');
+            
+            if (dailyChart) {
+                dailyChart.destroy();
+            }
+
+            dailyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Avg Temperature (°C)',
+                        data: temps,
+                        backgroundColor: 'rgba(118, 75, 162, 0.6)',
+                        borderColor: '#764ba2',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function refreshData() {
+            await updateCurrentTemp();
+            await updateHourlyChart();
+            await updateDailyChart();
+        }
+
+        // Initial load
+        refreshData();
+
+        // Auto-refresh every 30 seconds
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>
