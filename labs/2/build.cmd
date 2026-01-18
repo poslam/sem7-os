@@ -1,11 +1,5 @@
 @echo off
-REM Скрипт сборки для лабораторной работы 2 (Windows)
 
-echo ==========================================
-echo Building Process Library - Lab 2
-echo ==========================================
-
-REM Создаем директорию для сборки
 if not exist build mkdir build
 cd build
 
@@ -27,10 +21,6 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo ==========================================
-echo Build completed successfully!
-echo ==========================================
-echo.
 echo Executables are in: build\bin\Release\
 echo.
 echo To run tests:

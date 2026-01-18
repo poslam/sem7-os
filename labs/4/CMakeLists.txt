@@ -13,3 +13,8 @@ add_executable(simulator simulator.c)
 
 target_compile_options(simulator PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(simulator PRIVATE m)
+
+# Установка выходной директории для исполняемых файлов
+set_target_properties(lab4 simulator PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)

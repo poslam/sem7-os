@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Демонстрационный скрипт для лабораторной работы 3
-
-echo "=== Lab 3 Interactive Demo ==="
 echo ""
 
 cd "$(dirname "$0")/../build/bin"
@@ -58,4 +55,3 @@ else
 fi
 
 echo ""
-echo "=== Demo completed ==="

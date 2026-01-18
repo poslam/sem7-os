@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Скрипт сборки для лабораторной работы 2
-
-echo "=========================================="
-echo "Building Process Library - Lab 2"
-echo "=========================================="
-
-# Создаем директорию для сборки
 mkdir -p build
 cd build
 
@@ -28,9 +21,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "=========================================="
-echo "Build completed successfully!"
-echo "=========================================="
 echo ""
 echo "Executables are in: build/bin/"
 echo ""
