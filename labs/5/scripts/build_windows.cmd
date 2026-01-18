@@ -7,11 +7,15 @@ REM Create build directory
 if not exist build mkdir build
 cd build
 
+REM Clean CMake cache if exists
+if exist CMakeCache.txt del CMakeCache.txt
+if exist CMakeFiles rmdir /s /q CMakeFiles
+
 REM Run CMake
-cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 
 REM Build
-mingw32-make -j4
+make -j4
 
 echo.
 echo Build complete!
@@ -21,9 +25,8 @@ echo   - bin\temp_monitor.exe    : Main temperature monitoring server
 echo   - bin\temp_simulator.exe  : Temperature simulator
 echo.
 echo Usage:
-echo   1. Run simulator: bin\temp_simulator.exe
-echo   2. Run server: bin\temp_monitor.exe --http 8080
-echo   3. Open browser: http://localhost:8080
+echo   1. Run server: bin\temp_monitor.exe --http 8080
+echo   2. Open browser: http://localhost:8080
 echo.
 
 pause

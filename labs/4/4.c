@@ -9,14 +9,14 @@
 #include <time.h>
 
 #ifdef _WIN32
-    #include <windows.h>
-    #define sleep(x) Sleep((x) * 1000)
+#include <windows.h>
+#define sleep(x) Sleep((x) * 1000)
 #else
-    #include <fcntl.h>
-    #include <signal.h>
-    #include <sys/select.h>
-    #include <termios.h>
-    #include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/select.h>
+#include <termios.h>
+#include <unistd.h>
 #endif
 
 #define LOG_MEASURE "measurements.log"
@@ -33,50 +33,63 @@ static volatile sig_atomic_t g_running = 1;
 static volatile int g_running = 1;
 #endif
 
-struct Measurement {
+struct Measurement
+{
     time_t ts;
     double value;
 };
 
-struct MeasurementBuffer {
+struct MeasurementBuffer
+{
     struct Measurement items[10];
     size_t size;
 };
 
-struct RollingStats {
+struct RollingStats
+{
     double sum;
     size_t count;
 };
 
-static time_t now_ts(void) {
+static time_t now_ts(void)
+{
     return time(NULL);
 }
 
-static struct tm local_tm(time_t ts) {
+static struct tm local_tm(time_t ts)
+{
     struct tm tm_res;
+#ifdef _WIN32
+    localtime_s(&tm_res, &ts);
+#else
     localtime_r(&ts, &tm_res);
+#endif
     return tm_res;
 }
 
-static double compute_avg(const struct RollingStats *stats) {
+static double compute_avg(const struct RollingStats *stats)
+{
     return (stats->count == 0) ? 0.0 : stats->sum / (double)stats->count;
 }
 
 #ifndef _WIN32
-static void signal_handler(int signum) {
+static void signal_handler(int signum)
+{
     (void)signum;
     g_running = 0;
 }
 #endif
 
-static size_t count_lines(const char *file_path) {
+static size_t count_lines(const char *file_path)
+{
     FILE *f = fopen(file_path, "r");
     if (!f)
         return 0;
 
     size_t count = 0;
     int c;
-    while ((c = fgetc(f)) != EOF) {
+    while ((c = fgetc(f)) != EOF)
+    {
         if (c == '\n')
             ++count;
     }
@@ -85,9 +98,11 @@ static size_t count_lines(const char *file_path) {
     return count;
 }
 
-static void reset_if_oversize(const char *file_path, int type) {
+static void reset_if_oversize(const char *file_path, int type)
+{
     size_t limit = 0;
-    switch (type) {
+    switch (type)
+    {
     case 0:
         limit = MAX_MEASUREMENTS_LOG;
         break;
@@ -106,7 +121,8 @@ static void reset_if_oversize(const char *file_path, int type) {
         remove(file_path);
 }
 
-static void append_line(const char *file_path, const char *msg, int type) {
+static void append_line(const char *file_path, const char *msg, int type)
+{
     reset_if_oversize(file_path, type);
 
     FILE *f = fopen(file_path, "a");
@@ -117,27 +133,32 @@ static void append_line(const char *file_path, const char *msg, int type) {
     fclose(f);
 }
 
-static void double_to_string(double value, char *out, size_t out_size) {
+static void double_to_string(double value, char *out, size_t out_size)
+{
     /* std::to_string uses 6 digits after the decimal point */
     snprintf(out, out_size, "%.6f", value);
 }
 
-static void hash_of_string(const char *src, char *dst, size_t dst_size) {
+static void hash_of_string(const char *src, char *dst, size_t dst_size)
+{
     size_t len = strlen(src);
     size_t needed = len * 2 + 1;
-    if (dst_size < needed) {
+    if (dst_size < needed)
+    {
         if (dst_size > 0)
             dst[0] = '\0';
         return;
     }
 
-    for (size_t i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i)
+    {
         unsigned char c = (unsigned char)src[i];
         snprintf(dst + i * 2, 3, "%02X", c);
     }
 }
 
-static bool parse_packet(const char *line, double *value, char *checksum, size_t checksum_size) {
+static bool parse_packet(const char *line, double *value, char *checksum, size_t checksum_size)
+{
     if (!line || !value || !checksum || checksum_size == 0)
         return false;
 
@@ -154,7 +175,8 @@ static bool parse_packet(const char *line, double *value, char *checksum, size_t
 }
 
 #ifdef _WIN32
-static HANDLE open_serial_port(const char *device) {
+static HANDLE open_serial_port(const char *device)
+{
     HANDLE hSerial = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
     if (hSerial == INVALID_HANDLE_VALUE)
         return INVALID_HANDLE_VALUE;
@@ -162,7 +184,8 @@ static HANDLE open_serial_port(const char *device) {
     DCB dcbSerialParams = {0};
     dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
 
-    if (!GetCommState(hSerial, &dcbSerialParams)) {
+    if (!GetCommState(hSerial, &dcbSerialParams))
+    {
         CloseHandle(hSerial);
         return INVALID_HANDLE_VALUE;
     }
@@ -172,7 +195,8 @@ static HANDLE open_serial_port(const char *device) {
     dcbSerialParams.StopBits = ONESTOPBIT;
     dcbSerialParams.Parity = NOPARITY;
 
-    if (!SetCommState(hSerial, &dcbSerialParams)) {
+    if (!SetCommState(hSerial, &dcbSerialParams))
+    {
         CloseHandle(hSerial);
         return INVALID_HANDLE_VALUE;
     }
@@ -182,7 +206,8 @@ static HANDLE open_serial_port(const char *device) {
     timeouts.ReadTotalTimeoutConstant = 1000;
     timeouts.ReadTotalTimeoutMultiplier = 10;
 
-    if (!SetCommTimeouts(hSerial, &timeouts)) {
+    if (!SetCommTimeouts(hSerial, &timeouts))
+    {
         CloseHandle(hSerial);
         return INVALID_HANDLE_VALUE;
     }
@@ -190,7 +215,8 @@ static HANDLE open_serial_port(const char *device) {
     return hSerial;
 }
 #else
-static int configure_serial(int fd) {
+static int configure_serial(int fd)
+{
     struct termios tty;
     if (tcgetattr(fd, &tty) != 0)
         return -1;
@@ -219,12 +245,14 @@ static int configure_serial(int fd) {
     return 0;
 }
 
-static int open_serial_port(const char *device) {
+static int open_serial_port(const char *device)
+{
     int fd = open(device, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
         return -1;
 
-    if (configure_serial(fd) != 0) {
+    if (configure_serial(fd) != 0)
+    {
         close(fd);
         return -1;
     }
@@ -234,26 +262,32 @@ static int open_serial_port(const char *device) {
 #endif
 
 #ifdef _WIN32
-static ssize_t read_line_timeout(HANDLE hSerial, char *buf, size_t buf_size, int timeout_sec) {
+static ssize_t read_line_timeout(HANDLE hSerial, char *buf, size_t buf_size, int timeout_sec)
+{
     (void)timeout_sec; /* timeout set in handle */
     if (buf_size == 0)
         return -1;
 
     size_t pos = 0;
 
-    while (pos + 1 < buf_size) {
+    while (pos + 1 < buf_size)
+    {
         char ch;
         DWORD bytesRead = 0;
 
-        if (!ReadFile(hSerial, &ch, 1, &bytesRead, NULL)) {
+        if (!ReadFile(hSerial, &ch, 1, &bytesRead, NULL))
+        {
             return -1;
         }
 
-        if (bytesRead == 1) {
+        if (bytesRead == 1)
+        {
             if (ch == '\n' || ch == '\r')
                 break;
             buf[pos++] = ch;
-        } else {
+        }
+        else
+        {
             break; /* timeout or no data */
         }
     }
@@ -262,13 +296,15 @@ static ssize_t read_line_timeout(HANDLE hSerial, char *buf, size_t buf_size, int
     return (ssize_t)pos;
 }
 #else
-static ssize_t read_line_timeout(int fd, char *buf, size_t buf_size, int timeout_sec) {
+static ssize_t read_line_timeout(int fd, char *buf, size_t buf_size, int timeout_sec)
+{
     if (buf_size == 0)
         return -1;
 
     size_t pos = 0;
 
-    while (pos + 1 < buf_size) {
+    while (pos + 1 < buf_size)
+    {
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(fd, &readfds);
@@ -278,9 +314,12 @@ static ssize_t read_line_timeout(int fd, char *buf, size_t buf_size, int timeout
         tv.tv_usec = 0;
 
         int rv = select(fd + 1, &readfds, NULL, NULL, &tv);
-        if (rv == 0) {
+        if (rv == 0)
+        {
             break; /* timeout */
-        } else if (rv < 0) {
+        }
+        else if (rv < 0)
+        {
             if (errno == EINTR)
                 continue;
             return -1;
@@ -288,13 +327,18 @@ static ssize_t read_line_timeout(int fd, char *buf, size_t buf_size, int timeout
 
         char ch;
         ssize_t n = read(fd, &ch, 1);
-        if (n == 1) {
+        if (n == 1)
+        {
             if (ch == '\n' || ch == '\r')
                 break;
             buf[pos++] = ch;
-        } else if (n == 0) {
+        }
+        else if (n == 0)
+        {
             break; /* EOF or no data */
-        } else {
+        }
+        else
+        {
             if (errno == EINTR)
                 continue;
             return -1;
@@ -306,8 +350,10 @@ static ssize_t read_line_timeout(int fd, char *buf, size_t buf_size, int timeout
 }
 #endif
 
-static void flush_measurements(struct MeasurementBuffer *buffer) {
-    for (size_t i = 0; i < buffer->size; ++i) {
+static void flush_measurements(struct MeasurementBuffer *buffer)
+{
+    for (size_t i = 0; i < buffer->size; ++i)
+    {
         char line[128];
         snprintf(line, sizeof(line), "%ld %.6f", (long)buffer->items[i].ts, buffer->items[i].value);
         append_line(LOG_MEASURE, line, 0);
@@ -315,8 +361,10 @@ static void flush_measurements(struct MeasurementBuffer *buffer) {
     buffer->size = 0;
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
+int main(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         fprintf(stderr, "Usage: %s [port]\n", argv[0]);
         return -1;
     }
@@ -329,13 +377,15 @@ int main(int argc, char **argv) {
 
 #ifdef _WIN32
     HANDLE serial_fd = open_serial_port(argv[1]);
-    if (serial_fd == INVALID_HANDLE_VALUE) {
+    if (serial_fd == INVALID_HANDLE_VALUE)
+    {
         fprintf(stderr, "Failed to open port %s\n", argv[1]);
         return -2;
     }
 #else
     int serial_fd = open_serial_port(argv[1]);
-    if (serial_fd < 0) {
+    if (serial_fd < 0)
+    {
         fprintf(stderr, "Failed to open port %s: %s\n", argv[1], strerror(errno));
         return -2;
     }
@@ -353,28 +403,34 @@ int main(int argc, char **argv) {
 
     printf("Temperature logger started. Press Ctrl+C to stop.\n");
 
-    while (g_running) {
+    while (g_running)
+    {
         ssize_t len = read_line_timeout(serial_fd, line, sizeof(line), 1);
-        if (len > 0) {
+        if (len > 0)
+        {
             double value = 0.0;
             char checksum[128];
 
-            if (parse_packet(line, &value, checksum, sizeof(checksum))) {
+            if (parse_packet(line, &value, checksum, sizeof(checksum)))
+            {
                 bool value_ok = (value >= -60.0 && value <= 60.0);
 
-                if (buffer.size > 0) {
+                if (buffer.size > 0)
+                {
                     double diff = fabs(value - buffer.items[buffer.size - 1].value);
                     value_ok = value_ok && (diff < 1.0);
                 }
 
-                if (value_ok) {
+                if (value_ok)
+                {
                     char value_str[64];
                     double_to_string(value, value_str, sizeof(value_str));
 
                     char calc[128];
                     hash_of_string(value_str, calc, sizeof(calc));
 
-                    if (strcmp(calc, checksum) == 0) {
+                    if (strcmp(calc, checksum) == 0)
+                    {
                         printf("New value -> %.6f\n", value);
                         time_t ts = now_ts();
 
@@ -382,15 +438,17 @@ int main(int argc, char **argv) {
                         buffer.items[buffer.size].value = value;
                         buffer.size++;
 
-                        if (buffer.size >= 10) {
+                        if (buffer.size >= 10)
+                        {
                             /* ИСПРАВЛЕНО: Добавляем ВСЕ значения из буфера в статистику */
-                            for (size_t i = 0; i < buffer.size; ++i) {
+                            for (size_t i = 0; i < buffer.size; ++i)
+                            {
                                 hour_stats.sum += buffer.items[i].value;
                                 day_stats.sum += buffer.items[i].value;
                             }
                             hour_stats.count += buffer.size;
                             day_stats.count += buffer.size;
-                            
+
                             flush_measurements(&buffer);
                         }
                     }
@@ -399,8 +457,10 @@ int main(int argc, char **argv) {
 
             struct tm cur_tm = local_tm(now_ts());
 
-            if (cur_tm.tm_hour != last_hour) {
-                if (hour_stats.count > 0) {
+            if (cur_tm.tm_hour != last_hour)
+            {
+                if (hour_stats.count > 0)
+                {
                     char hourly_line[128];
                     double avg = compute_avg(&hour_stats);
                     snprintf(hourly_line, sizeof(hourly_line), "%ld %.6f", (long)now_ts(), avg);
@@ -413,8 +473,10 @@ int main(int argc, char **argv) {
                 last_hour = cur_tm.tm_hour;
             }
 
-            if (cur_tm.tm_mday != last_mday) {
-                if (day_stats.count > 0) {
+            if (cur_tm.tm_mday != last_mday)
+            {
+                if (day_stats.count > 0)
+                {
                     char daily_line[128];
                     double avg = compute_avg(&day_stats);
                     snprintf(daily_line, sizeof(daily_line), "%ld %.6f", (long)now_ts(), avg);
@@ -431,21 +493,24 @@ int main(int argc, char **argv) {
 
     /* Финальная запись данных перед завершением */
     printf("\nShutting down...\n");
-    
-    if (buffer.size > 0) {
+
+    if (buffer.size > 0)
+    {
         printf("Flushing %zu remaining measurements\n", buffer.size);
         flush_measurements(&buffer);
     }
-    
-    if (hour_stats.count > 0) {
+
+    if (hour_stats.count > 0)
+    {
         char hourly_line[128];
         double avg = compute_avg(&hour_stats);
         snprintf(hourly_line, sizeof(hourly_line), "%ld %.6f", (long)now_ts(), avg);
         append_line(LOG_HOURLY, hourly_line, 1);
         printf("Final hourly average: %.6f (count: %zu)\n", avg, hour_stats.count);
     }
-    
-    if (day_stats.count > 0) {
+
+    if (day_stats.count > 0)
+    {
         char daily_line[128];
         double avg = compute_avg(&day_stats);
         snprintf(daily_line, sizeof(daily_line), "%ld %.6f", (long)now_ts(), avg);

@@ -10,9 +10,14 @@ find_package(Threads REQUIRED)
 # Check for SQLite3
 find_library(SQLITE3_LIBRARY sqlite3)
 if(NOT SQLITE3_LIBRARY)
-    message(STATUS "SQLite3 not found in system, will try to use pkg-config")
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+    if(WIN32)
+        message(STATUS "SQLite3 not found, using static link (add -lsqlite3 manually or install sqlite3)")
+        set(SQLITE3_LIBRARY "sqlite3")
+    else()
+        message(STATUS "SQLite3 not found in system, will try to use pkg-config")
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+    endif()
 endif()
 
 # Platform-specific settings
@@ -31,6 +36,7 @@ set(MAIN_SOURCES
     src/database.c
     src/http_server.c
     src/serial_reader.c
+    src/sqlite3.c
 )
 
 # Source files for simulator
@@ -44,7 +50,6 @@ add_executable(temp_monitor ${MAIN_SOURCES})
 # Link libraries
 target_link_libraries(temp_monitor
     ${CMAKE_THREAD_LIBS_INIT}
-    ${SQLITE3_LIBRARY}
     ${PLATFORM_LIBS}
 )
 
@@ -54,8 +59,8 @@ target_link_libraries(temp_monitor
 # target_link_libraries(temp_simulator ${PLATFORM_LIBS})
 
 # Утилита для генерации тестовых данных
-add_executable(generate_test_data src/generate_test_data.c)
-target_link_libraries(generate_test_data ${SQLITE3_LIBRARY} ${PLATFORM_LIBS})
+add_executable(generate_test_data src/generate_test_data.c src/sqlite3.c)
+target_link_libraries(generate_test_data ${PLATFORM_LIBS})
 
 # Copy web files to build directory
 file(COPY ${CMAKE_SOURCE_DIR}/web DESTINATION ${CMAKE_BINARY_DIR})
