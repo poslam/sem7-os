@@ -48,15 +48,20 @@ target_link_libraries(temp_monitor
     ${PLATFORM_LIBS}
 )
 
-# Temperature simulator executable
-add_executable(temp_simulator ${SIMULATOR_SOURCES})
-target_link_libraries(temp_simulator ${PLATFORM_LIBS})
+# Temperature simulator executable (опционально - для тестирования с серийным портом)
+# Раскомментируйте, если нужно тестировать работу с реальным/виртуальным устройством
+# add_executable(temp_simulator ${SIMULATOR_SOURCES})
+# target_link_libraries(temp_simulator ${PLATFORM_LIBS})
+
+# Утилита для генерации тестовых данных
+add_executable(generate_test_data src/generate_test_data.c)
+target_link_libraries(generate_test_data ${SQLITE3_LIBRARY} ${PLATFORM_LIBS})
 
 # Copy web files to build directory
 file(COPY ${CMAKE_SOURCE_DIR}/web DESTINATION ${CMAKE_BINARY_DIR})
 
 # Install targets
-install(TARGETS temp_monitor temp_simulator
+install(TARGETS temp_monitor
     RUNTIME DESTINATION bin
 )
 

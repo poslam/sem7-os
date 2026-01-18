@@ -98,7 +98,38 @@ void calculate_daily_average() {
 }
 
 int main(int argc, char *argv[]) {
-    const char *db_path = "temperature.db";
+    // По умолчанию БД в той же директории, где исполняемый файл
+    char default_db_path[1024];
+    
+    // Получаем директорию исполняемого файла
+    const char *exe_dir = ".";
+#ifndef _WIN32
+    char exe_path[1024];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len == -1) {
+        // На macOS /proc/self/exe не работает, используем argv[0]
+        if (argc > 0 && argv[0] != NULL) {
+            strncpy(exe_path, argv[0], sizeof(exe_path) - 1);
+            exe_path[sizeof(exe_path) - 1] = '\0';
+            char *last_slash = strrchr(exe_path, '/');
+            if (last_slash != NULL) {
+                *last_slash = '\0';
+                exe_dir = exe_path;
+            }
+        }
+    } else {
+        exe_path[len] = '\0';
+        char *last_slash = strrchr(exe_path, '/');
+        if (last_slash != NULL) {
+            *last_slash = '\0';
+            exe_dir = exe_path;
+        }
+    }
+#endif
+    
+    snprintf(default_db_path, sizeof(default_db_path), "%s/temperature.db", exe_dir);
+    const char *db_path = default_db_path;
+    
     const char *port_name = "/dev/ttyUSB0"; // Adjust for your system
     int http_port = 8080;
     int serial_baud = 9600;
@@ -120,6 +151,7 @@ int main(int argc, char *argv[]) {
     printf("Database: %s\n", db_path);
     printf("Serial port: %s\n", port_name);
     printf("HTTP port: %d\n", http_port);
+    printf("\n");
 
     // Setup signal handler
     signal(SIGINT, signal_handler);
