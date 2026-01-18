@@ -57,9 +57,7 @@ pacman -S mingw-w64-x86_64-gtk3 \
 ### Linux/macOS
 
 ```bash
-cd scripts
-chmod +x build_linux.sh
-./build_linux.sh
+sh scripts/build_linux.sh
 ```
 
 ### Windows
@@ -76,36 +74,17 @@ build_windows.cmd
 Сначала нужно запустить температурный сервер:
 
 ```bash
-cd ../5/build
-./bin/temp_monitor --http 8080
+cd labs/5
+sh scripts/generate_data.sh
+sh scripts/build_linux.sh
+./build/bin/temp_monitor --http 8080
 ```
 
 ### 2. Запустить GUI приложение
 
 ```bash
-cd ../6/build
-./bin/temp_monitor_gui http://localhost:8080
-```
-
-Если сервер запущен на порту по умолчанию (8080) на localhost, можно просто запустить:
-
-```bash
-./bin/temp_monitor_gui
-```
-
-## Структура проекта
-
-```
-lab6/
-├── CMakeLists.txt
-├── include/
-│   └── api_client.h        # HTTP API клиент
-├── src/
-│   ├── main.c              # Главная программа с GTK GUI
-│   └── api_client.c        # Реализация HTTP API клиента
-└── scripts/
-    ├── build_linux.sh      # Скрипт сборки для Linux
-    └── build_windows.cmd   # Скрипт сборки для Windows
+cd labs/6
+./build/bin/temp_monitor_gui
 ```
 
 ## Особенности реализации
